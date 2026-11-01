@@ -1,0 +1,21 @@
+{
+  "name": "claude-chat-connecter",
+  "version": "1.0.0",
+  "description": "mcp plugin to share full Claude conversations with /excode and /incode",
+  "type": "module",
+  "bin": {
+    "claude-chat-connecter": "./src/index.js"
+  },
+  "main": "./src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["claude", "mcp", "plugin", "context", "share"],
+  "license": "MIT"
+}
