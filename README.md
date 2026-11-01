@@ -1,173 +1,111 @@
 # Claude Chat Connecter
 
-An MCP plugin for Claude that lets separate conversations share context through a portable exported code. Type `/excode` in any chat to get a shareable code; anyone else with the plugin pastes it with `/incode` and Claude loads the full history. Conversations chain — each export carries everything from all previously imported chats, so context accumulates across any number of sessions or accounts.
-
-## How it works
-
-The plugin registers two tools with Claude via MCP:
-
-- `ccs_export` — triggered by `/excode`. Claude serializes every message in the current conversation, appends it to any accumulated chain from previous imports, compresses the result (gzip, base64url), and returns a `CCS2:` code.
-- `ccs_import` — triggered by `/incode [code]`. Claude decodes the chain, reads the full transcript, and retains a `chain_token` in context. If you run `/excode` later in the same chat, Claude passes that token back to the tool so the chain is carried forward intact.
-
-The server is stateless. Nothing is stored anywhere — the accumulated chain lives in Claude's context as an opaque compressed token passed between tool calls.
+MCP plugin for Claude that lets you share conversations between chats using a generated code. Paste the code in another chat and Claude knows everything that was said all the context, code, decisions, whatever. Works across accounts too.
 
 ## Requirements
 
-- Node.js 18 or later
+- Node.js 18+
 - Claude Desktop or Claude Code
 
-## Installation
+## Install
 
-No local clone or manual setup needed. Both Claude Desktop and Claude Code launch the MCP server automatically via `npx` when they start.
+You don't need to clone anything or run a server manually. Claude starts the MCP process itself using npx.
 
 ### Claude Desktop
 
-Open the config file:
+Find your config file:
 
-| Platform | Path |
+| OS | Path |
 |---|---|
 | macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
 | Linux | `~/.config/Claude/claude_desktop_config.json` |
 
-Add an entry under `mcpServers` (create the key if it doesn't exist):
+Add this to it (or merge `mcpServers` if you already have one):
 
 ```json
 {
   "mcpServers": {
     "claude-chat-connecter": {
       "command": "npx",
-      "args": ["-y", "github:yourusername/claude-chat-connecter"]
+      "args": ["-y", "github:abhubx/ClaudeChatConnecter"]
     }
   }
 }
 ```
 
-Replace `yourusername` with your GitHub username. Restart Claude Desktop.
+Restart Claude Desktop after saving.
 
 ### Claude Code
 
 ```bash
-claude mcp add claude-chat-connecter -- npx -y github:yourusername/claude-chat-connecter
+claude mcp add claude-chat-connecter -- npx -y github:abhubx/ClaudeChatConnecter
 ```
-
-Again, replace `yourusername` with your actual GitHub username.
 
 ## Usage
 
-### `/excode` — export a conversation
-
-Type `/excode` at any point in a chat. Claude packages the entire conversation — including any previously imported chain — into a `CCS2:` code and displays it. Copy the code and share it however you like.
-
-### `/incode [code]` — import a conversation
-
-Paste the following into any chat, at the start or mid-conversation:
-
-```
-/incode CCS2:H4sIAAAAAAAAA...
-```
-
-Claude decodes and reads the full chain, then briefly summarizes what was loaded and asks how to continue.
-
-You can run `/incode` more than once in the same chat. Each call merges the new chain into the existing one in order, so you can pull in context from multiple separate conversations before exporting.
-
-### Chaining across multiple people
-
-Each exported code contains the full history of everything imported into that chat before the export. It compounds:
-
-```
-Chat A  →  /excode  →  CCS2:aaa (contains: A)
-Chat B  →  /incode CCS2:aaa  →  ...work continues...  →  /excode  →  CCS2:bbb (contains: A + B)
-Chat C  →  /incode CCS2:bbb  →  ...work continues...  →  /excode  →  CCS2:ccc (contains: A + B + C)
-```
-
-There's no limit on chain depth.
-
-## Example
-
-Person A has been working through a bug:
+Export the current chat:
 
 ```
 /excode
 ```
 
-Claude packages the conversation and returns a code. Person A sends it to Person B.
+Claude gives you a `CCS2:...` code. Copy it.
 
-Person B opens a new Claude chat:
-
-```
-/incode CCS2:H4sIAAAAAAAAA6tWKkktLlGyUlIqS04tKU4tLk4tKkktLlGyUlIqS...
-```
-
-Claude responds:
+Import it in another chat (yours or someone else's):
 
 ```
-Loaded 1 conversation — 22 messages.
-
-You were debugging a race condition in a React useEffect. The issue was a stale
-closure over `userId` in an async fetch callback. The cleanup wasn't cancelling
-the in-flight request on unmount. You'd just introduced an AbortController and
-were testing whether the ref-based approach was cleaner. Want to pick up there?
+/incode CCS2:H4sIAAAAAAAAA6tW...
 ```
 
-Person B continues, then runs `/excode`. The resulting code contains both conversations. Anyone who imports that gets the full thread from the beginning.
+Claude reads everything and picks up where it left off. Works at the start of a chat or in the middle of one.
 
-## Code format
+## Example
 
-All codes are self-contained and prefixed with a version tag:
-
-| Prefix | Description |
-|---|---|
-| `CCS2:` | Current format. Supports chained conversations. |
-| `CCS1:` | v1 single-conversation format. Importable by this plugin. |
-| `CCS0:` | v0 uncompressed fallback format. Importable by this plugin. |
-
-## Project structure
+You've been working on something with Claude for a while and want to hand it off:
 
 ```
-claude-chat-connecter/
-├── src/
-│   └── index.js    # MCP server — tool definitions and request handlers
-├── package.json
-├── README.md
-└── LICENSE
+you: /excode
 ```
 
-The only runtime dependency is `@modelcontextprotocol/sdk`. Compression uses Node's built-in `zlib` module.
+Claude spits out a code. You send it to your friend.
+
+Your friend opens a new chat:
+
+```
+them: /incode CCS2:H4sIAAAAAAAAA6tWKkktLlGyUlIq...
+
+claude: loaded 1 conversation, 24 messages.
+
+you were debugging a race condition in a useEffect — stale closure over
+userId in an async fetch that wasn't getting cancelled on unmount. you
+just added an AbortController. want to keep going from there?
+```
+
+Your friend keeps working, then does `/excode`. Now the code has both conversations in it.
 
 ## Troubleshooting
 
-**Claude ignores `/excode` or `/incode`**
+**Claude doesn't do anything when I type `/excode` or `/incode`**
 
-The server probably isn't connected. In Claude Desktop, go to Settings → Developer → MCP Servers and check that `claude-chat-connecter` appears with a green status indicator. If it's missing, the JSON config likely has a syntax error — a trailing comma or mismatched brace is enough to break it silently. Run the config file through a JSON validator.
+The server isn't connected. In Claude Desktop go to Settings → Developer → MCP Servers and check if `claude-chat-connecter` shows up. If it's not there, your JSON config has a syntax error — run it through [jsonlint.com](https://jsonlint.com) and check for missing commas or braces.
 
-In Claude Code, run `claude mcp list` to see registered servers and their status.
+In Claude Code: `claude mcp list`
 
-**`npx` fails on startup**
+**npx fails when Claude tries to start the server**
 
-Check that `node --version` returns 18 or higher. On macOS with Homebrew, the `npx` binary may not be on the PATH that Claude Desktop inherits. If that's the case, use the full path to npx in the config:
+Run `node --version` and make sure it's 18 or higher. On macOS with Homebrew, Claude Desktop sometimes can't find npx because of PATH issues. Fix it by using the full path:
 
 ```json
-{
-  "mcpServers": {
-    "claude-chat-connecter": {
-      "command": "/opt/homebrew/bin/npx",
-      "args": ["-y", "github:yourusername/claude-chat-connecter"]
-    }
-  }
-}
+"command": "/opt/homebrew/bin/npx"
 ```
 
-Find the correct path with `which npx`.
+Run `which npx` to get the right path for your machine.
 
-**"Unrecognised code format" when importing**
+**"Unrecognised code format" error**
 
-The code wasn't copied in full. CCS codes can be several kilobytes — make sure nothing was truncated, particularly at the end. The code must start with `CCS2:`, `CCS1:`, or `CCS0:` and contain no line breaks or extra whitespace.
+You didn't copy the full code. They can get long. Make sure it starts with `CCS2:` and has nothing cut off at the end.
 
-**Chain is missing after `/excode` following an `/incode`**
+**Chain didn't carry over when I exported**
 
-The chain is preserved through a `chain_token` that Claude holds in context and passes back to the tool on export. If Claude doesn't do this automatically, prompt it: *"use the chain token from the import when you export."* The token is explicitly included in the `/incode` response, but in a long conversation it can drift out of active attention.
-
-## License
-
-MIT — see [LICENSE](./LICENSE).
+The chain survives through a token Claude holds in memory. If it gets lost in a long conversation you can just tell Claude "include the chain token when you export" and it'll sort it out.
