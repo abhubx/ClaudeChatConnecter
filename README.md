@@ -1,4 +1,4 @@
-# Claude Context Share
+# Claude Chat Connecter
 
 > Share full Claude conversations with anyone. One code exports everything — every message, all code, all context. Paste it in any chat and Claude picks up exactly where you left off.
 
